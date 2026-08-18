@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบตรวจเช็ครถ Emergency & Refer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .tab-btn.active {
+            border-bottom: 3px solid #0284c7;
+            color: #0284c7;
+            font-weight: 700;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white; font-size: 12pt; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 pb-12">
+
+    <header class="bg-sky-700 text-white shadow-md sticky top-0 z-50 no-print">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-white p-2 rounded-lg text-sky-700 shadow">
+                    <i class="fa-solid fa-truck-medical text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">ระบบตรวจเช็ครถ Emergency & Refer</h1>
+                    <p class="text-xs text-sky-200">แบบบันทึกการตรวจเช็คอุปกรณ์และระดับออกซิเจนประจำวัน</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="exportCurrentToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-lg flex items-center gap-2 transition border border-emerald-500 shadow">
+                    <i class="fa-solid fa-file-excel"></i> ส่งออก Excel
+                </button>
+                <button onclick="window.print()" class="bg-sky-800 hover:bg-sky-900 text-white text-sm px-3 py-2 rounded-lg flex items-center gap-2 transition border border-sky-600">
+                    <i class="fa-solid fa-print"></i> พิมพ์หน้าปัจจุบัน
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 mt-6">
+
+        <div class="flex border-b border-slate-300 mb-6 bg-white rounded-t-xl px-4 pt-2 no-print shadow-sm overflow-x-auto">
+            <button onclick="switchTab('tab-er')" id="btn-tab-er" class="tab-btn active px-5 py-3 text-sm font-medium transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-kit-medical"></i> ตรวจของรถ Emergency (รพ.)
+            </button>
+            <button onclick="switchTab('tab-st')" id="btn-tab-st" class="tab-btn px-5 py-3 text-sm font-medium transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-house-medical"></i> ตรวจของรถ Emergency (รพ.สต.)
+            </button>
+            <button onclick="switchTab('tab-o2')" id="btn-tab-o2" class="tab-btn px-5 py-3 text-sm font-medium transition flex items-center gap-2 whitespace-nowrap">
+                <i class="fa-solid fa-gauge-high"></i> บันทึกระดับ O2 (Refer)
+            </button>
+            <button onclick="switchTab('tab-history')" id="btn-tab-history" class="tab-btn px-5 py-3 text-sm font-medium transition flex items-center gap-2 whitespace-nowrap bg-amber-50 text-amber-800 hover:bg-amber-100">
+                <i class="fa-solid fa-clock-rotate-left text-amber-600"></i> ประวัติการตรวจย้อนหลัง
+            </button>
+        </div>
+
+        <div id="form-header-box" class="bg-white rounded-xl p-5 shadow-sm mb-6 border border-slate-200">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">วันที่ตรวจเช็ค <span class="text-rose-500">*</span></label>
+                    <input type="date" id="check-date" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">เวร / รอบการตรวจ <span class="text-rose-500">*</span></label>
+                    <select id="check-shift" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                        <option value="ดึก">เวรดึก (ด)</option>
+                        <option value="เช้า">เวรเช้า (ช)</option>
+                        <option value="บ่าย">เวรบ่าย (บ)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">ชื่อผู้ตรวจสอบ <span class="text-rose-500">*</span></label>
+                    <input type="text" id="inspector-name" placeholder="ระบุชื่อ-นามสกุล..." class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-er" class="tab-content">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="p-4 bg-sky-50 border-b border-sky-100 flex justify-between items-center">
+                    <h2 class="font-bold text-sky-800 text-base flex items-center gap-2">
+                        <i class="fa-solid fa-list-check"></i> รายการอุปกรณ์รถ Emergency (ฉุกเฉินระดับ รพ.)
+                    </h2>
+                    <span class="text-xs bg-sky-200 text-sky-800 px-2.5 py-1 rounded-full font-semibold">แยกหมวดหมู่ & ลิ้นชัก</span>
+                </div>
+                <div class="p-4 overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <th class="p-3 border text-center w-12">ลำดับ</th>
+                                <th class="p-3 border">รายการเวชภัณฑ์ / อุปกรณ์</th>
+                                <th class="p-3 border text-center w-28">เกณฑ์มาตรฐาน</th>
+                                <th class="p-3 border text-center w-36">สถานะ / จำนวนจริง</th>
+                                <th class="p-3 border text-center w-28">ผลการตรวจ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-er-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-st" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
+                    <h2 class="font-bold text-emerald-800 text-base flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-check"></i> รายการอุปกรณ์รถ Emergency (ฉุกเฉินระดับ รพ.สต.)
+                    </h2>
+                    <span class="text-xs bg-emerald-200 text-emerald-800 px-2.5 py-1 rounded-full font-semibold">ชุดมาตรฐาน รพ.สต.</span>
+                </div>
+                <div class="p-4 overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <th class="p-3 border text-center w-12">ลำดับ</th>
+                                <th class="p-3 border">รายการเวชภัณฑ์ / อุปกรณ์</th>
+                                <th class="p-3 border text-center w-28">เกณฑ์มาตรฐาน</th>
+                                <th class="p-3 border text-center w-36">สถานะ / จำนวนจริง</th>
+                                <th class="p-3 border text-center w-28">ผลการตรวจ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-st-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-o2" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                <div class="p-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
+                    <h2 class="font-bold text-blue-800 text-base flex items-center gap-2">
+                        <i class="fa-solid fa-bottle-water"></i> บันทึกระดับปริมาณออกซิเจน (O2) รถ Refer
+                    </h2>
+                    <span class="text-xs bg-blue-200 text-blue-800 px-2.5 py-1 rounded-full font-semibold">หน่วย: PSI / ลิตร</span>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="border rounded-xl p-4 bg-slate-50">
+                            <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-gauge text-blue-600"></i> ถังออกซิเจนหลัก (Main Cylinder)
+                            </h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">แรงดันตามเกจวัด (PSI)</label>
+                                    <input type="number" id="o2-main-psi" placeholder="ระบุ เช่น 1500, 2000" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">สถานะถัง</label>
+                                    <select id="o2-main-status" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <option value="พร้อมใช้งาน (พร้อมส่งต่อ)">พร้อมใช้งาน (แรงดัน > 1000 PSI)</option>
+                                        <option value="ต้องเติมก๊าซ">ต้องเติมก๊าซ (แรงดันต่ำกว่าเกณฑ์)</option>
+                                        <option value="ชำรุด / มีจุดรั่วซึม">ชำรุด / มีจุดรั่วซึม</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border rounded-xl p-4 bg-slate-50">
+                            <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-bottle-droplet text-emerald-600"></i> ถังออกซิเจนสำรอง / พกพา (Portable)
+                            </h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">แรงดันตามเกจวัด (PSI)</label>
+                                    <input type="number" id="o2-portable-psi" placeholder="ระบุ เช่น 1500, 2000" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">สถานะถังสำรอง</label>
+                                    <select id="o2-portable-status" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <option value="พร้อมใช้งาน (พร้อมส่งต่อ)">พร้อมใช้งาน (แรงดัน > 1000 PSI)</option>
+                                        <option value="ต้องเติมก๊าซ">ต้องเติมก๊าซ (แรงดันต่ำกว่าเกณฑ์)</option>
+                                        <option value="ชำรุด / มีจุดรั่วซึม">ชำรุด / มีจุดรั่วซึม</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">หมายเหตุเพิ่มเติม / ข้อผิดปกติที่พบเกี่ยวกับระบบ O2</label>
+                        <textarea id="o2-remark" rows="3" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)..." class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="action-buttons-box" class="flex flex-wrap justify-end gap-3 no-print mb-8">
+            <button onclick="clearForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                <i class="fa-solid fa-rotate-left"></i> ล้างฟอร์ม
+            </button>
+            <button onclick="saveInspection()" class="bg-sky-600 hover:bg-sky-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-md transition flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i> บันทึกผลการตรวจเช็ค & เคลียร์ข้อมูล
+            </button>
+        </div>
+
+        <div id="tab-history" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
+                    <div>
+                        <h2 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-amber-500"></i> ประวัติบันทึกการตรวจเช็คย้อนหลัง
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">ค้นหาและตรวจสอบบันทึกย้อนหลังตามวัน เดือน ปี หรือผู้ตรวจสอบ</p>
+                    </div>
+                    <button onclick="clearAllHistory()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs px-3 py-2 rounded-lg border border-rose-200 transition">
+                        <i class="fa-solid fa-trash-can"></i> ล้างประวัติทั้งหมด
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">เลือกเดือน / ปี</label>
+                        <input type="month" id="filter-month" onchange="renderHistoryTable()" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ค้นหาตามชื่อผู้ตรวจ</label>
+                        <input type="text" id="filter-name" placeholder="พิมพ์ชื่อผู้ตรวจ..." oninput="renderHistoryTable()" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">เวร</label>
+                        <select id="filter-shift" onchange="renderHistoryTable()" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            <option value="">ทั้งหมด</option>
+                            <option value="ดึก">เวรดึก</option>
+                            <option value="เช้า">เวรเช้า</option>
+                            <option value="บ่าย">เวรบ่าย</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <th class="p-3 border text-center w-12">#</th>
+                                <th class="p-3 border text-center w-32">วันที่บันทึก</th>
+                                <th class="p-3 border text-center w-24">เวร</th>
+                                <th class="p-3 border">ผู้ตรวจสอบ</th>
+                                <th class="p-3 border text-center w-36">สถานะ O2 (หลัก/สำรอง)</th>
+                                <th class="p-3 border text-center w-40">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="history-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+            <div class="p-5 bg-sky-700 text-white flex justify-between items-center sticky top-0 z-10">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-file-invoice"></i> รายละเอียดบันทึกการตรวจเช็ค
+                </h3>
+                <button onclick="closeModal()" class="text-white hover:bg-sky-800 p-1.5 rounded-lg transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6">
+                </div>
+            <div class="p-4 bg-slate-50 border-t flex justify-end gap-2 sticky bottom-0">
+                <button onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ข้อมูลอุปกรณ์รถ Emergency (ระดับ โรงพยาบาล)
+        const erHospitalData = [
+            { section: "อุปกรณ์ทั่วไปหน้าตู้ / ทั่วไป" },
+            { id: "er_1", name: "เครื่อง suction (ขวด,สาย,ยาง,ข้อต่อ)", standard: "1 ชุด", type: "number" },
+            { id: "er_2", name: "Handle +ถ่าน , ถ่านสำรอง", standard: "2, 2 ชุด", type: "text" },
+            { id: "er_3", name: "Blade โค้ง No. 1, 2, 3, 4", standard: "1, 2, 2, 2 ชิ้น", type: "text" },
+            { id: "er_4", name: "Medicut No.18, 20, 22, 24", standard: "5, 5, 5, 5 เข็ม", type: "text" },
+            { id: "er_5", name: "Needle No. 24, 22, 18", standard: "5, 5, 5 เข็ม", type: "text" },
+            { id: "er_6", name: "Syringe dispose 1, 3, 5, 10, 20, 50 ml.", standard: "5, 5, 5, 5, 2, 2 อัน", type: "text" },
+            { id: "er_7", name: "SW 10 ml.(inject), แว่นขยาย", standard: "2, 1 ชิ้น", type: "text" },
+            { id: "er_8", name: "T-way, Extension, SetIV Ped, Adult, HL", standard: "3, 5, 3, 3, 3 ชิ้น", type: "text" },
+            { id: "er_9", name: "ไฟฉาย, กรรไกร, Magill forceps, Guide wire", standard: "1, 1, 1, 5 ชิ้น", type: "text" },
+            { id: "er_10", name: "Transpore, พลาสเตอร์เหนียว, Fixumul, Guaze bandage", standard: "1, 1, 1, 1 ม้วน/ชิ้น", type: "text" },
+            { id: "er_11", name: "อับสำลี, Forceps, mask, ถุงมือ dispose", standard: "1, 1, 1, 1 ชุด", type: "text" },
+            { id: "er_12", name: "ถุงมือ sterile no. 7, 7.5, 8", standard: "2, 2, 1 คู่", type: "text" },
+            { id: "er_13", name: "อุปกรณ์ตรวจ DTX, Hct", standard: "1, 1 ชุด", type: "text" },
+            { id: "er_14", name: "ถัง O2, CPR Board, เสา IV, ถังขยะ, หมอนทราย", standard: "1, 1, 1, 1, 1 ชุด", type: "text" },
+
+            { section: "ลิ้นชักที่ 1 : ยาฉุกเฉิน (Emergency Drugs)" },
+            { id: "er_d1", name: "Adrenaline 1mg/ml", standard: "30 หลอด", type: "number" },
+            { id: "er_d2", name: "Atropine sulfate 0.6mg/ml", standard: "15 หลอด", type: "number" },
+            { id: "er_d3", name: "Amiodarone 150mg/3ml", standard: "10 หลอด", type: "number" },
+            { id: "er_d4", name: "10% Calcium gluconate 4.5 mEq", standard: "2 หลอด", type: "number" },
+            { id: "er_d5", name: "Diazepam 10mg/2ml", standard: "5 หลอด", type: "number" },
+            { id: "er_d6", name: "Dopamine 250mg/10ml", standard: "3 หลอด", type: "number" },
+            { id: "er_d7", name: "Magnesium sulfate 1g/2ml", standard: "2 หลอด", type: "number" },
+            { id: "er_d8", name: "Nicardipine 10mg/10ml", standard: "2 หลอด", type: "number" },
+            { id: "er_d9", name: "Phenytoin 250mg/5ml (อยู่ในกล่อง Epilepsy)", standard: "กล่อง Epilepsy", type: "text" },
+            { id: "er_d10", name: "Sodium bicarbonate 44.6 mEq/50ml", standard: "3 ขวด", type: "number" },
+            { id: "er_d11", name: "50% Glucose 50ml", standard: "3 ขวด", type: "number" },
+            { id: "er_d12", name: "Levophed 4mg", standard: "2 หลอด", type: "number" },
+            { id: "er_d13", name: "5% D5W (250 ml)", standard: "1 ถุง", type: "number" },
+
+            { section: "ลิ้นชักที่ 2 : อุปกรณ์เปิดทางเดินหายใจ (Airway)" },
+            { id: "er_dr2_1", name: "Airway no. 60, 70, 80, 90, 100 mm", standard: "2, 2, 2, 5, 5 ชิ้น", type: "text" },
+
+            { section: "ลิ้นชักที่ 3 : ท่อช่วยหายใจ (Endotracheal Tubes)" },
+            { id: "er_dr3_1", name: "ET-tube no. 2.5, 3, 3.5", standard: "3, 3, 3 ท่อ", type: "text" },
+            { id: "er_dr3_2", name: "ET-tube no. 4, 4.5, 5", standard: "3, 3, 3 ท่อ", type: "text" },
+            { id: "er_dr3_3", name: "ET-tube no. 5.5, 6, 6.5", standard: "3, 3, 3 ท่อ", type: "text" },
+            { id: "er_dr3_4", name: "ET-tube no. 7, 7.5, 8", standard: "3, 3, 3 ท่อ", type: "text" },
+
+            { section: "ลิ้นชักที่ 4 : ชุดป้องกันอันตรายส่วนบุคคล (PPE)" },
+            { id: "er_dr4_1", name: "PPE แพทย์ (หน้ากาก, เสื้อกาวน์, หมวก, แว่นตา)", standard: "มีครบชุด", type: "check" },
+
+            { section: "ลิ้นชักที่ 5 : สารน้ำและอุปกรณ์ O2" },
+            { id: "er_dr5_1", name: "0.9% NSS 1000 ml. / 5% D/W 500 ml.", standard: "4, 1 ขวด", type: "text" },
+            { id: "er_dr5_2", name: "0.9% NSS 100ml. / SW 100ml. / DW 100ml.", standard: "1, 1, 1 ขวด", type: "text" },
+            { id: "er_dr5_3", name: "กระป๋อง O2 + สาย cannular + สายยางต่อ", standard: "1, 1, 1 ชุด", type: "text" },
+            { id: "er_dr5_4", name: "Ambu ใหญ่, กลาง, เล็ก + mask + Reservoir", standard: "1, 1, 1 ชุด", type: "text" }
+        ];
+
+        // ข้อมูลอุปกรณ์รถ Emergency (ระดับ รพ.สต.)
+        const erSubdistrictData = [
+            { id: "st_1", name: "เครื่อง suction (ขวด,สาย,ยาง,ข้อต่อ) พร้อมใช้", standard: "1 ชุด", type: "number" },
+            { id: "st_2", name: "Handle +ถ่าน (พร้อมใช้) , ถ่านสำรอง", standard: "2, 2 ชุด", type: "text" },
+            { id: "st_3", name: "Blade โค้ง No. 1, 2, 3, 4", standard: "1, 1, 1, 1 ชิ้น", type: "text" },
+            { id: "st_4", name: "Medicut No.18, 20, 22, 24", standard: "2, 2, 2, 2 เข็ม", type: "text" },
+            { id: "st_5", name: "Needle No. 24, 22, 18", standard: "2, 2, 5 เข็ม", type: "text" },
+            { id: "st_6", name: "Syringe dispose 1, 3, 5, 10, 20, 50 ml.", standard: "2, 2, 2, 2, 1, 1 อัน", type: "text" },
+            { id: "st_7", name: "SW 10 ml.(inject)", standard: "2 หลอด", type: "number" },
+            { id: "st_8", name: "T-way, Extension, SetIV Ped, Adult, HL", standard: "1, 1, 2, 2, 1 ชิ้น", type: "text" },
+            { id: "st_9", name: "ไฟฉาย, กรรไกร, Magill forceps, Guide wire", standard: "1, 1, 1, 5 ชิ้น", type: "text" },
+            { id: "st_10", name: "Transpore, พลาสเตอร์เหนียว, Fixumul, Guaze bandage", standard: "1, 1, 1, 1 ม้วน/ชิ้น", type: "text" },
+            { id: "st_11", name: "สำลีบอล, mask, ถุงมือ dispose", standard: "1, 1, 1 ชุด", type: "text" },
+            { id: "st_12", name: "ถุงมือ sterile no. 7, 7.5 , 8", standard: "1, 1, 1 คู่", type: "text" },
+            { id: "st_13", name: "อุปกรณ์ตรวจ DTX, Hct", standard: "1, 1 ชุด", type: "text" },
+            { id: "st_14", name: "ถัง O2, CPR Board, เสา IV, ถังขยะ, หมอนทราย", standard: "1, 1, 1, 1, 1 ชุด", type: "text" },
+            { id: "st_15", name: "Airway no.60(1), 70(2), 80(3), 90(4)mm", standard: "1, 1, 1, 2 ชิ้น", type: "text" },
+            { id: "st_16", name: "แว่นตา (สำหรับแพทย์ใส่ท่อช่วยหายใจ)", standard: "1 อัน", type: "number" },
+            { id: "st_17", name: "ET-tube no. 2.5, 3, 3.5, 4, 4.5, 5", standard: "1, 1, 1, 1, 1, 1 ท่อ", type: "text" },
+            { id: "st_18", name: "ET-tube no. 6, 6.5, 7, 7.5, 8", standard: "1, 1, 1, 1, 1 ท่อ", type: "text" },
+            { id: "st_19", name: "Suction no. 6, 8, 12, 14, 16, 18", standard: "1, 1, 1, 1, 1, 1 สาย", type: "text" },
+            { id: "st_20", name: "0.9% NSS 1000 ml. , 0.9% NSS 100ml.", standard: "2 ขวด", type: "number" },
+            { id: "st_21", name: "กระป๋อง O2 + สาย cannular , สายยางต่อ", standard: "1, 1, 1 ชุด", type: "text" },
+            { id: "st_22", name: "Ambu ใหญ่, กลาง, เล็ก + mask + Reservoir", standard: "1, 1, 1 ชุด", type: "text" }
+        ];
+
+        // Render Tables
+        function renderHospitalTable() {
+            const tbody = document.getElementById('table-er-body');
+            tbody.innerHTML = '';
+            let itemIndex = 1;
+
+            erHospitalData.forEach(item => {
+                if (item.section) {
+                    const secRow = document.createElement('tr');
+                    secRow.className = "bg-slate-200 font-bold text-slate-700";
+                    secRow.innerHTML = `<td colspan="5" class="p-2.5 px-4 text-xs tracking-wide uppercase"><i class="fa-solid fa-folder-open mr-1"></i> ${item.section}</td>`;
+                    tbody.appendChild(secRow);
+                } else {
+                    const row = document.createElement('tr');
+                    row.className = "border-b hover:bg-slate-50 transition";
+                    
+                    let inputField = '';
+                    if (item.type === 'check') {
+                        inputField = `
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="${item.id}_val" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                <span class="ml-2 text-xs font-medium text-slate-600">ครบถ้วน</span>
+                            </label>`;
+                    } else {
+                        inputField = `<input type="text" id="${item.id}_val" placeholder="กรอกจำนวน..." class="w-full border border-slate-300 rounded px-2 py-1 text-sm text-center focus:ring-1 focus:ring-sky-500 focus:outline-none">`;
+                    }
+
+                    row.innerHTML = `
+                        <td class="p-2.5 border text-center font-medium text-slate-500">${itemIndex++}</td>
+                        <td class="p-2.5 border font-medium text-slate-800">${item.name}</td>
+                        <td class="p-2.5 border text-center text-xs text-slate-600 bg-slate-50">${item.standard}</td>
+                        <td class="p-2 border text-center">${inputField}</td>
+                        <td class="p-2 border text-center">
+                            <select id="${item.id}_status" class="border border-slate-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-sky-500 focus:outline-none">
+                                <option value="ปกติ">ปกติ / ครบ</option>
+                                <option value="ขาด">พร่อง / ไม่ครบ</option>
+                                <option value="หมดอายุ">ใกล้หมดอายุ</option>
+                            </select>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            });
+        }
+
+        function renderSubdistrictTable() {
+            const tbody = document.getElementById('table-st-body');
+            tbody.innerHTML = '';
+            let itemIndex = 1;
+
+            erSubdistrictData.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = "border-b hover:bg-slate-50 transition";
+                let inputField = `<input type="text" id="${item.id}_val" placeholder="กรอกจำนวน..." class="w-full border border-slate-300 rounded px-2 py-1 text-sm text-center focus:ring-1 focus:ring-emerald-500 focus:outline-none">`;
+
+                row.innerHTML = `
+                    <td class="p-2.5 border text-center font-medium text-slate-500">${itemIndex++}</td>
+                    <td class="p-2.5 border font-medium text-slate-800">${item.name}</td>
+                    <td class="p-2.5 border text-center text-xs text-slate-600 bg-slate-50">${item.standard}</td>
+                    <td class="p-2 border text-center">${inputField}</td>
+                    <td class="p-2 border text-center">
+                        <select id="${item.id}_status" class="border border-slate-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none">
+                            <option value="ปกติ">ปกติ / ครบ</option>
+                            <option value="ขาด">พร่อง / ไม่ครบ</option>
+                            <option value="หมดอายุ">ใกล้หมดอายุ</option>
+                        </select>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Switch Tabs
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(tabId).classList.remove('hidden');
+            if (tabId === 'tab-er') document.getElementById('btn-tab-er').classList.add('active');
+            if (tabId === 'tab-st') document.getElementById('btn-tab-st').classList.add('active');
+            if (tabId === 'tab-o2') document.getElementById('btn-tab-o2').classList.add('active');
+            if (tabId === 'tab-history') {
+                document.getElementById('btn-tab-history').classList.add('active');
+                renderHistoryTable();
+            }
+
+            // ซ่อน/แสดง Box กรอกข้อมูล
+            const isHistory = tabId === 'tab-history';
+            document.getElementById('form-header-box').classList.toggle('hidden', isHistory);
+            document.getElementById('action-buttons-box').classList.toggle('hidden', isHistory);
+        }
+
+        // ล้างฟอร์ม
+        function clearForm() {
+            document.querySelectorAll('input[type="text"], input[type="number"], textarea').forEach(i => i.value = '');
+            document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+            setCurrentDate();
+        }
+
+        // ตั้งวันที่ปัจจุบัน
+        function setCurrentDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('check-date').value = today;
+        }
+
+        // ==========================================
+        // ระบบบันทึกข้อมูล และประวัติย้อนหลัง (LOGS)
+        // ==========================================
+
+        function saveInspection() {
+            const checkDate = document.getElementById('check-date').value;
+            const checkShift = document.getElementById('check-shift').value;
+            const inspectorName = document.getElementById('inspector-name').value;
+
+            if (!checkDate || !inspectorName.trim()) {
+                alert('กรุณาระบุ วันที่ตรวจเช็ค และ ชื่อผู้ตรวจสอบ ให้ครบถ้วน');
+                document.getElementById('inspector-name').focus();
+                return;
+            }
+
+            // 1. เก็บข้อมูลรถ Emergency รพ.
+            const erHospRecords = [];
+            erHospitalData.forEach(item => {
+                if (!item.section) {
+                    let actualVal = "";
+                    if (item.type === 'check') {
+                        const chk = document.getElementById(`${item.id}_val`);
+                        actualVal = chk && chk.checked ? "ครบถ้วน" : "ไม่ครบ";
+                    } else {
+                        const input = document.getElementById(`${item.id}_val`);
+                        actualVal = input ? input.value : "";
+                    }
+                    const statusSelect = document.getElementById(`${item.id}_status`);
+                    erHospRecords.push({
+                        name: item.name,
+                        standard: item.standard,
+                        actual: actualVal,
+                        status: statusSelect ? statusSelect.value : "ปกติ"
+                    });
+                }
+            });
+
+            // 2. เก็บข้อมูลรถ Emergency รพ.สต.
+            const erSubRecords = [];
+            erSubdistrictData.forEach(item => {
+                const input = document.getElementById(`${item.id}_val`);
+                const statusSelect = document.getElementById(`${item.id}_status`);
+                erSubRecords.push({
+                    name: item.name,
+                    standard: item.standard,
+                    actual: input ? input.value : "",
+                    status: statusSelect ? statusSelect.value : "ปกติ"
+                });
+            });
+
+            // 3. เก็บข้อมูล O2 Refer
+            const o2Data = {
+                mainPsi: document.getElementById('o2-main-psi').value || "-",
+                mainStatus: document.getElementById('o2-main-status').value,
+                portablePsi: document.getElementById('o2-portable-psi').value || "-",
+                portableStatus: document.getElementById('o2-portable-status').value,
+                remark: document.getElementById('o2-remark').value || "-"
+            };
+
+            // สร้าง Object ข้อมูลประจำรอบ
+            const inspectionRecord = {
+                id: 'LOG_' + Date.now(),
+                timestamp: new Date().toLocaleString('th-TH'),
+                date: checkDate,
+                shift: checkShift,
+                inspector: inspectorName,
+                erHospital: erHospRecords,
+                erSubdistrict: erSubRecords,
+                o2: o2Data
+            };
+
+            // บันทึกลง LocalStorage
+            const history = JSON.parse(localStorage.getItem('er_check_history') || '[]');
+            history.unshift(inspectionRecord); // ไว้หน้าสุด
+            localStorage.setItem('er_check_history', JSON.stringify(history));
+
+            alert(`✅ บันทึกข้อมูลการตรวจเช็คประจำเวร (${checkShift}) เรียบร้อยแล้ว!\nระบบได้ทำการเคลียร์ข้อมูลเพื่อเตรียมสำหรับการกรอกครั้งถัดไป`);
+
+            // เคลียร์ค่าที่กรอกทันที
+            clearForm();
+        }
+
+        // โหลดและแสดงรายการประวัติ
+        function renderHistoryTable() {
+            const history = JSON.parse(localStorage.getItem('er_check_history') || '[]');
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '';
+
+            const monthFilter = document.getElementById('filter-month').value; // YYYY-MM
+            const nameFilter = document.getElementById('filter-name').value.toLowerCase();
+            const shiftFilter = document.getElementById('filter-shift').value;
+
+            const filteredHistory = history.filter(item => {
+                let matchMonth = true;
+                if (monthFilter) {
+                    matchMonth = item.date.startsWith(monthFilter);
+                }
+
+                let matchName = true;
+                if (nameFilter) {
+                    matchName = item.inspector.toLowerCase().includes(nameFilter);
+                }
+
+                let matchShift = true;
+                if (shiftFilter) {
+                    matchShift = item.shift === shiftFilter;
+                }
+
+                return matchMonth && matchName && matchShift;
+            });
+
+            if (filteredHistory.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">ไม่พบประวัติการตรวจเช็คตามเงื่อนไขที่เลือก</td></tr>`;
+                return;
+            }
+
+            filteredHistory.forEach((record, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3 border text-center font-medium text-slate-500">${idx + 1}</td>
+                    <td class="p-3 border text-center font-semibold text-sky-700">${record.date}</td>
+                    <td class="p-3 border text-center"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-bold">เวร${record.shift}</span></td>
+                    <td class="p-3 border font-medium text-slate-800">${record.inspector}</td>
+                    <td class="p-3 border text-center text-xs">
+                        <div>หลัก: <span class="font-bold">${record.o2.mainPsi} PSI</span></div>
+                        <div>สำรอง: <span class="font-bold">${record.o2.portablePsi} PSI</span></div>
+                    </td>
+                    <td class="p-3 border text-center space-x-1">
+                        <button onclick="viewHistoryDetail('${record.id}')" class="bg-sky-600 hover:bg-sky-700 text-white text-xs px-2.5 py-1.5 rounded transition">
+                            <i class="fa-solid fa-eye"></i> รายละเอียด
+                        </button>
+                        <button onclick="deleteHistoryItem('${record.id}')" class="bg-rose-500 hover:bg-rose-600 text-white text-xs px-2.5 py-1.5 rounded transition">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ดูรายละเอียดบันทึกย้อนหลัง (Modal)
+        function viewHistoryDetail(recordId) {
+            const history = JSON.parse(localStorage.getItem('er_check_history') || '[]');
+            const record = history.find(r => r.id === recordId);
+            if (!record) return;
+
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-slate-100 p-4 rounded-xl border grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                        <div><span class="text-slate-500">วันที่ตรวจ:</span> <b class="text-sky-800">${record.date}</b></div>
+                        <div><span class="text-slate-500">เวร:</span> <b>เวร${record.shift}</b></div>
+                        <div><span class="text-slate-500">ผู้ตรวจ:</span> <b>${record.inspector}</b></div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-slate-700 mb-2 border-b pb-1"><i class="fa-solid fa-bottle-water text-blue-600"></i> ระดับออกซิเจน (Refer)</h4>
+                        <div class="grid grid-cols-2 gap-3 text-xs bg-blue-50 p-3 rounded-lg">
+                            <div><b>ถังหลัก:</b> ${record.o2.mainPsi} PSI (${record.o2.mainStatus})</div>
+                            <div><b>ถังสำรอง:</b> ${record.o2.portablePsi} PSI (${record.o2.portableStatus})</div>
+                            <div class="col-span-2"><b>หมายเหตุ:</b> ${record.o2.remark}</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-slate-700 mb-2 border-b pb-1"><i class="fa-solid fa-kit-medical text-sky-600"></i> สรุปผลการตรวจอุปกรณ์ (พบรายการผิดปกติ/ขาด)</h4>
+                        <ul class="text-xs space-y-1 pl-4 list-disc text-slate-700">
+                            ${
+                                [...record.erHospital, ...record.erSubdistrict]
+                                .filter(i => i.status !== 'ปกติ' || (i.actual && i.actual !== 'ครบถ้วน'))
+                                .map(i => `<li class="text-rose-600"><b>${i.name}:</b> กรอกจริง [${i.actual || 'ไม่ระบุ'}] - สถานะ: ${i.status}</li>`)
+                                .join('') || '<li class="text-emerald-600 font-bold">อุปกรณ์ทุกรายการปกติและครบถ้วน</li>'
+                            }
+                        </ul>
+                    </div>
+                </div>
+            `;
+            document.getElementById('history-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('history-modal').classList.add('hidden');
+        }
+
+        function deleteHistoryItem(recordId) {
+            if (confirm('คุณต้องการลบประวัติการตรวจเช็ครายการนี้ใช่หรือไม่?')) {
+                let history = JSON.parse(localStorage.getItem('er_check_history') || '[]');
+                history = history.filter(r => r.id !== recordId);
+                localStorage.setItem('er_check_history', JSON.stringify(history));
+                renderHistoryTable();
+            }
+        }
+
+        function clearAllHistory() {
+            if (confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประวัติการตรวจเช็คทั้งหมดในระบบ?')) {
+                localStorage.removeItem('er_check_history');
+                renderHistoryTable();
+            }
+        }
+
+        // Export Excel หน้าปัจจุบัน
+        function exportCurrentToExcel() {
+            const checkDate = document.getElementById('check-date').value || '-';
+            const checkShift = document.getElementById('check-shift').value || '-';
+            const inspectorName = document.getElementById('inspector-name').value || '-';
+
+            const wb = XLSX.utils.book_new();
+
+            // Sheet 1: ER Checklist
+            const erRows = [
+                ["แบบบันทึกการตรวจเช็คอุปกรณ์รถ Emergency"],
+                [`วันที่: ${checkDate}`, `เวร: ${checkShift}`, `ผู้ตรวจ: ${inspectorName}`],
+                [],
+                ["ลำดับ", "รายการอุปกรณ์", "เกณฑ์มาตรฐาน", "จำนวนจริง", "ผลการตรวจ"]
+            ];
+
+            let erIdx = 1;
+            erHospitalData.forEach(item => {
+                if(!item.section){
+                    const val = document.getElementById(`${item.id}_val`)?.value || '';
+                    const st = document.getElementById(`${item.id}_status`)?.value || 'ปกติ';
+                    erRows.push([erIdx++, item.name, item.standard, val, st]);
+                }
+            });
+
+            const wsER = XLSX.utils.aoa_to_sheet(erRows);
+            XLSX.utils.book_append_sheet(wb, wsER, "ตรวจรถ Emergency");
+
+            // Sheet 2: O2
+            const o2Rows = [
+                ["แบบบันทึกปริมาณออกซิเจนรถ Refer"],
+                [`วันที่: ${checkDate}`, `เวร: ${checkShift}`, `ผู้ตรวจ: ${inspectorName}`],
+                [],
+                ["รายการถัง O2", "แรงดัน (PSI)", "สถานะ"],
+                ["ถังหลัก", document.getElementById('o2-main-psi').value || '-', document.getElementById('o2-main-status').value],
+                ["ถังสำรอง", document.getElementById('o2-portable-psi').value || '-', document.getElementById('o2-portable-status').value]
+            ];
+            const wsO2 = XLSX.utils.aoa_to_sheet(o2Rows);
+            XLSX.utils.book_append_sheet(wb, wsO2, "บันทึก O2 Refer");
+
+            XLSX.writeFile(wb, `รายงานตรวจเช็ครถ_Emergency_${checkDate}.xlsx`);
+        }
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            setCurrentDate();
+            renderHospitalTable();
+            renderSubdistrictTable();
+        });
+    </script>
+</body>
+</html>
