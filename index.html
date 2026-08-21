@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบตรวจเช็ครถ Ambulance รพ.วังทรายพูน</title>
+    <title>ระบบตรวจเช็ครถ Ambulance รพ.ทดสอบ</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -21,11 +21,6 @@
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800 pb-12">
-
-    <!-- Config WEB APP URL -->
-    <script>
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyksJLnMUQiknbMHihwrKfi3sDmL99Xj_geGc9YRBaEeejxB-ZKj8hqkq2fKjTubtnWEQ/exec";
-    </script>
 
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white gap-3 transition-opacity">
@@ -382,27 +377,6 @@
         let totalSteps = masterStructure.length + 1;
         let stepItemStatuses = {};
 
-        // เรียก API ฝั่ง Server
-        async function callServerApi(action, payload = {}) {
-            if (typeof google !== 'undefined' && google.script && google.script.run) {
-                return new Promise((resolve, reject) => {
-                    google.script.run
-                        .withSuccessHandler(resolve)
-                        .withFailureHandler(reject)[action](...Object.values(payload));
-                });
-            } else {
-                const postData = new URLSearchParams();
-                postData.append('payload', JSON.stringify({ action, ...payload }));
-
-                const response = await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-                    body: postData
-                });
-                return await response.json();
-            }
-        }
-
         function showLoading(msg = 'กำลังโหลดข้อมูลระบบ...') {
             document.getElementById('loading-text').innerText = msg;
             document.getElementById('loading-overlay').classList.remove('hidden');
@@ -418,21 +392,11 @@
         });
 
         async function fetchBackendData() {
-            showLoading('กำลังโหลดข้อมูลล่าสุดจาก Google Sheets...');
-            try {
-                const res = await callServerApi('getInitialData');
-                if (res) {
-                    if (res.cars && res.cars.length > 0) carsList = res.cars;
-                    if (res.inspectors && res.inspectors.length > 0) inspectorsList = res.inspectors;
-                    if (res.structure && res.structure.length > 0) masterStructure = res.structure;
-                    if (res.history) inspectionHistory = res.history;
-                }
-            } catch (err) {
-                console.error("ไม่สามารถเชื่อมต่อกับ Google Sheets ได้:", err);
-            } finally {
+            showLoading('กำลังโหลดข้อมูลระบบทดสอบ...');
+            setTimeout(() => {
                 initUI();
                 hideLoading();
-            }
+            }, 300);
         }
 
         function initUI() {
@@ -703,24 +667,19 @@
                 o2: o2Result
             };
 
-            showLoading('กำลังบันทึกข้อมูลไปยัง Google Sheets...');
+            showLoading('กำลังบันทึกข้อมูล...');
 
-            try {
-                await callServerApi('saveInspectionRecord', { record });
+            setTimeout(() => {
                 inspectionHistory.unshift(record);
-                alert('✅ บันทึกข้อมูลการตรวจเช็คเรียบร้อยแล้ว!');
+                alert('✅ บันทึกข้อมูลการตรวจเช็คเรียบร้อยแล้ว! (ระบบทดสอบ)');
 
                 stepItemStatuses = {};
                 currentStepIndex = 0;
                 renderWizardSteps();
                 updateStepDisplay();
                 setCurrentDate();
-            } catch (err) {
-                console.error("การบันทึกล้มเหลว:", err);
-                alert('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูลลง Google Sheets!');
-            } finally {
                 hideLoading();
-            }
+            }, 300);
         }
 
         function switchMainView(viewId) {
@@ -738,7 +697,7 @@
                 document.getElementById('header-sub-title').innerText = 'ประวัติบันทึกการตรวจเช็คย้อนหลัง';
                 document.getElementById('menu-btn-history').className = "w-full text-left px-3 py-2.5 rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2.5 bg-amber-50 text-amber-700 border border-amber-200";
                 document.getElementById('menu-btn-check').className = "w-full text-left px-3 py-2.5 rounded-xl font-medium text-xs sm:text-sm flex items-center gap-2.5 text-slate-700 hover:bg-slate-100 transition";
-                fetchBackendData();
+                renderHistoryTable();
             }
         }
 
@@ -845,17 +804,12 @@
         async function deleteHistoryItem(recId) {
             if (confirm('คุณต้องการลบประวัติรายการนี้ใช่หรือไม่?')) {
                 showLoading('กำลังลบรายการ...');
-                try {
-                    await callServerApi('deleteInspectionRecord', { recId });
+                setTimeout(() => {
                     inspectionHistory = inspectionHistory.filter(r => r.id !== recId);
                     renderHistoryTable();
                     alert('🗑️ ลบประวัติเรียบร้อยแล้ว');
-                } catch (err) {
-                    console.error("การลบล้มเหลว:", err);
-                    alert('❌ เกิดข้อผิดพลาดในการลบรายการจาก Google Sheets');
-                } finally {
                     hideLoading();
-                }
+                }, 300);
             }
         }
 
@@ -979,19 +933,14 @@
         }
 
         async function syncSettingsToBackend() {
-            showLoading('กำลังซิงค์การตั้งค่าไปยัง Google Sheets...');
-            try {
-                await callServerApi('saveMasterSettings', { cars: carsList, inspectors: inspectorsList, structure: masterStructure });
+            showLoading('กำลังบันทึกการตั้งค่าระบบทดสอบ...');
+            setTimeout(() => {
                 loadDropdowns();
                 renderWizardSteps();
                 updateStepDisplay();
-                alert('✅ บันทึกการตั้งค่าลง Google Sheets เรียบร้อยแล้ว!');
-            } catch (err) {
-                console.error("ซิงค์ตั้งค่าไม่สำเร็จ:", err);
-                alert('❌ เกิดข้อผิดพลาดในการบันทึกการตั้งค่าลง Google Sheets');
-            } finally {
+                alert('✅ บันทึกการตั้งค่าเรียบร้อยแล้ว! (ระบบทดสอบ)');
                 hideLoading();
-            }
+            }, 300);
         }
 
         function renderAdminCarsList() {
